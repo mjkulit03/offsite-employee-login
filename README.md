@@ -174,6 +174,10 @@ This app needs a host with a **persistent disk** (the SQLite file must survive r
 
 A `render.yaml` blueprint is included, so most settings are automatic.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/mjkulit03/offsite-employee-login)
+
+**If the button doesn't work, do it manually (always works):**
+
 1. Sign up / log in at [render.com](https://render.com) with your GitHub account
 2. Go to **Blueprints** → **New Blueprint Instance** → select `mjkulit03/offsite-employee-login`
 3. Render reads `render.yaml` and pre-fills everything:
