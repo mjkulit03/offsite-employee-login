@@ -4,6 +4,7 @@
   "description": "Web-based Attendance and Location Tracking System for remote/offsite employees",
   "main": "src/server.js",
   "scripts": {
+    "prestart": "node src/db/seed.js",
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "seed": "node src/db/seed.js"

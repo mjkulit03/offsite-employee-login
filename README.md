@@ -151,7 +151,7 @@ The system uses the **Haversine formula** to calculate distance between the user
 
 ## 🔒 Security
 
-- **JWT Authentication**: Stateless tokens with configurable expiry
+- **JWT Authentication**: Stateless tokens (no expiry by default; sessions last until logout/secret change)
 - **RBAC**: Three roles (Admin, Supervisor, Employee) with route-level enforcement
 - **Supervisor Scope**: Supervisors can only view their assigned team
 - **Audit Trail**: All critical actions logged with user, timestamp, IP, and user agent
@@ -164,18 +164,49 @@ The system uses the **Haversine formula** to calculate distance between the user
 - **Excel Export**: Native .xlsx format using the xlsx library
 - **Filters**: Date range, department, status, employee
 
-## 🌐 Deployment
+## 🌐 Deployment — Access the App from Anywhere
 
-### Railway / Render / Fly.io
-1. Push to GitHub
-2. Connect your repo
-3. Set environment variables (`JWT_SECRET`, etc.)
-4. Deploy — the app runs on the configured `PORT`
+Your code lives on GitHub ([mjkulit03/offsite-employee-login](https://github.com/mjkulit03/offsite-employee-login)), but GitHub only stores code — to open the app in a browser from anywhere, run it on a hosting service that deploys from GitHub. GitHub Pages will **not** work here: it hosts static files only and cannot run the Express backend or SQLite database.
 
-### GitHub Pages (Static Frontend Only)
-For a frontend-only deployment with a separate backend:
-1. Build and deploy the `public/` folder to GitHub Pages
-2. Host the backend on Render/Railway and set `API_BASE` in the frontend
+This app needs a host with a **persistent disk** (the SQLite file must survive restarts) and **HTTPS** (browser geolocation is blocked on plain HTTP). Render with the blueprint in this repo satisfies both.
+
+### Deploy to Render (recommended, ~5 minutes)
+
+A `render.yaml` blueprint is included, so most settings are automatic.
+
+1. Sign up / log in at [render.com](https://render.com) with your GitHub account
+2. Go to **Blueprints** → **New Blueprint Instance** → select `mjkulit03/offsite-employee-login`
+3. Render reads `render.yaml` and pre-fills everything:
+   - Build: `npm install` · Start: `npm start` (seeds default users on first boot)
+   - Persistent disk mounted at `/var/data` → `DB_PATH=/var/data/attendance.db`
+   - `JWT_SECRET` is generated automatically
+4. Click **Apply** and wait for the first deploy to finish
+5. Your app is now live at `https://offsite-employee-login.onrender.com` (exact URL shown on the dashboard)
+
+Log in with the seeded admin account and **change the password right away** (Employees → Edit). Every future `git push` to `main` auto-deploys.
+
+> **Note:** the cheapest Render plan with a persistent disk is paid (~$7/mo). Without a disk, the SQLite file resets on every restart and all attendance data would be lost.
+
+### Free alternative: Cloudflare Tunnel from your own PC
+
+Zero monthly cost; data stays on your machine. Requires your PC to stay on:
+
+1. Install cloudflared and run `npm start` locally
+2. In a second terminal: `cloudflared tunnel --url http://localhost:3000`
+3. You get a public HTTPS URL like `https://random-name.trycloudflare.com` — share it with your team
+
+### Office LAN only (no internet needed)
+
+Run `npm start`, then employees on the same Wi-Fi open `http://<your-PC-IP>:3000`. Geolocation clock-in will **not** work on phones this way (browsers require HTTPS for location).
+
+### After deploying to any host
+
+| Setting | Value |
+|---|---|
+| `JWT_SECRET` | Strong random value (Render generates one) |
+| `DB_PATH` | Path on the persistent disk, e.g. `/var/data/attendance.db` |
+| `CORS_ORIGIN` | Your app's URL once you have a domain |
+| Admin password | Change `admin123` immediately after first login |
 
 ## 🛠️ Tech Stack
 
@@ -186,7 +217,7 @@ For a frontend-only deployment with a separate backend:
 | Charts | Chart.js |
 | Icons | Lucide Icons |
 | Backend | Node.js + Express |
-| Database | SQLite (via better-sqlite3) |
+| Database | SQLite (via sql.js) |
 | Auth | JWT (jsonwebtoken) |
 | Passwords | bcryptjs |
 | Export | xlsx library |

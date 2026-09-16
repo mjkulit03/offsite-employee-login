@@ -1,0 +1,27 @@
+# Render Blueprint — one-click deploy of the Attendance Tracker
+# Docs: https://render.com/docs/blueprint-spec
+#
+# The persistent disk is required because the app stores data in a SQLite
+# file (DB_PATH). Serverless/free tiers without a disk would wipe attendance
+# records on every restart, so this blueprint uses the paid `starter` plan.
+services:
+  - type: web
+    name: offsite-employee-login
+    runtime: node
+    plan: starter            # cheapest plan that supports persistent disks
+    region: singapore        # closest region to PH users; change as needed
+    buildCommand: npm install
+    startCommand: npm start  # runs `prestart` first, which seeds default users
+    disk:
+      name: sqlite-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: DB_PATH
+        value: /var/data/attendance.db   # keeps the DB on the persistent disk
+      - key: JWT_SECRET
+        generateValue: true              # strong random secret, set on first deploy
+      - key: CORS_ORIGIN
+        value: "*"
