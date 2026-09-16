@@ -2,7 +2,9 @@
 // Attendance & Location Tracker – Frontend Application
 // ═══════════════════════════════════════════════════════════════════════════
 
-const API_BASE = '/api';
+// Set by config.js — same-origin `/api` when the backend serves this page,
+// or the full Render API URL when the page is hosted on GitHub Pages.
+const API_BASE = (window.APP_CONFIG && window.APP_CONFIG.API_BASE) || '/api';
 let currentUser = null;
 let authToken = null;
 let map = null;

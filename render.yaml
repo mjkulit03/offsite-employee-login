@@ -24,4 +24,6 @@ services:
       - key: JWT_SECRET
         generateValue: true              # strong random secret, set on first deploy
       - key: CORS_ORIGIN
-        value: "*"
+        # GitHub Pages site + this app's own onrender.com URL.
+        # Add more (comma-separated) if you attach a custom domain.
+        value: "https://mjkulit03.github.io,https://offsite-employee-login.onrender.com"

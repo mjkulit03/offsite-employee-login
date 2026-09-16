@@ -166,11 +166,26 @@ The system uses the **Haversine formula** to calculate distance between the user
 
 ## 🌐 Deployment — Access the App from Anywhere
 
-Your code lives on GitHub ([mjkulit03/offsite-employee-login](https://github.com/mjkulit03/offsite-employee-login)), but GitHub only stores code — to open the app in a browser from anywhere, run it on a hosting service that deploys from GitHub. GitHub Pages will **not** work here: it hosts static files only and cannot run the Express backend or SQLite database.
+Your code lives on GitHub ([mjkulit03/offsite-employee-login](https://github.com/mjkulit03/offsite-employee-login)). GitHub Pages can now host the **frontend UI** (via the included Actions workflow), but Pages cannot run the Express backend or SQLite — so the recommended setup splits the two: **UI on GitHub Pages, API on Render**.
+
+### Part A — Frontend on GitHub Pages
+
+`.github/workflows/deploy-pages.yml` deploys the `public/` folder to Pages on every push to `main`. One-time setup:
+
+1. Push this branch to `main` on GitHub
+2. Open the repo → **Settings** → **Pages** → under **Build and deployment**, set **Source** to **GitHub Actions**
+3. That's it — every push to `main` redeploys the UI to:
+   **https://mjkulit03.github.io/offsite-employee-login/**
+
+The UI calls the backend at `https://offsite-employee-login.onrender.com/api` (configured in `public/config.js`). If your Render service URL ends up different, edit that one line in `public/config.js` and push again.
+
+When served by the backend itself (localhost, or the onrender.com URL), `config.js` automatically falls back to same-origin `/api` — no changes needed.
+
+### Part B — Backend on Render (~5 minutes)
 
 This app needs a host with a **persistent disk** (the SQLite file must survive restarts) and **HTTPS** (browser geolocation is blocked on plain HTTP). Render with the blueprint in this repo satisfies both.
 
-### Deploy to Render (recommended, ~5 minutes)
+### Deploy to Render (~5 minutes)
 
 A `render.yaml` blueprint is included, so most settings are automatic.
 
@@ -209,7 +224,7 @@ Run `npm start`, then employees on the same Wi-Fi open `http://<your-PC-IP>:3000
 |---|---|
 | `JWT_SECRET` | Strong random value (Render generates one) |
 | `DB_PATH` | Path on the persistent disk, e.g. `/var/data/attendance.db` |
-| `CORS_ORIGIN` | Your app's URL once you have a domain |
+| `CORS_ORIGIN` | Set by `render.yaml` to the GitHub Pages URL + the onrender.com URL; add more, comma-separated, if you use a custom domain |
 | Admin password | Change `admin123` immediately after first login |
 
 ## 🛠️ Tech Stack

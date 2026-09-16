@@ -130,6 +130,8 @@
   </div>
 
   <!-- ═══ JavaScript Application ═══ -->
-  <script src="/app.js"></script>
+  <!-- config.js must load first: it sets window.APP_CONFIG.API_BASE -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

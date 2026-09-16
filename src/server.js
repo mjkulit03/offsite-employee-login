@@ -16,10 +16,29 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ──────────────────────────────────────────────────────────────
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true,
-}));
+// CORS_ORIGIN accepts a single origin or a comma-separated list, e.g. the
+// GitHub Pages site plus the app's own host. "*" allows everything (fine for
+// a demo; tighten this in production).
+const allowedOrigins = (process.env.CORS_ORIGIN || '*')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const corsOptions =
+  allowedOrigins.includes('*')
+    ? { origin: true, credentials: true }
+    : {
+        origin(origin, callback) {
+          // Allow non-browser tools (curl, health checks) that send no Origin.
+          if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+          // Disallowed origin: no CORS headers are emitted, so browsers block
+          // the response. The request still runs (no 5xx noise in the logs).
+          return callback(null, false);
+        },
+        credentials: true,
+      };
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
