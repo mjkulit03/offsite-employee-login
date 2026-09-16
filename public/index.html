@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendance & Location Tracker</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet.js -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    .fade-in { animation: fadeIn .3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    #map { height: 400px; border-radius: 0.75rem; z-index: 0; }
+    .sidebar-link { transition: all .15s; }
+    .sidebar-link:hover, .sidebar-link.active { background: rgba(99,102,241,.15); color: #6366f1; }
+    .status-badge { padding: 2px 10px; border-radius: 9999px; font-size: .75rem; font-weight: 600; }
+    .toast { position:fixed; top:1rem; right:1rem; z-index:9999; padding:1rem 1.5rem; border-radius:.5rem; color:#fff; font-weight:500; animation: slideIn .3s ease-out; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+  </style>
+</head>
+<body class="h-full bg-gray-50 text-gray-800">
+
+  <!-- ═══ Toast Container ═══ -->
+  <div id="toast-container"></div>
+
+  <!-- ═══ Login Screen ═══ -->
+  <div id="login-screen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-600 to-brand-800 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md fade-in">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="map-pin" class="w-8 h-8 text-brand-600"></i>
+        </div>
+        <h1 class="text-2xl font-bold text-gray-900">Attendance Tracker</h1>
+        <p class="text-gray-500 mt-1">Sign in to your account</p>
+      </div>
+      <form id="login-form" class="space-y-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+          <input id="login-username" type="text" required
+                 class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition"
+                 placeholder="Enter your username" autocomplete="username" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <input id="login-password" type="password" required
+                 class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition"
+                 placeholder="••••••••" />
+        </div>
+        <button type="submit"
+                class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2.5 rounded-lg transition focus:ring-2 focus:ring-brand-500 focus:ring-offset-2">
+          Sign In
+        </button>
+      </form>
+      <div id="login-error" class="mt-4 text-sm text-red-600 text-center hidden"></div>
+      <div class="mt-6 text-xs text-gray-400 text-center">
+        Demo: admin / admin123
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Main App Shell ═══ -->
+  <div id="app-shell" class="hidden h-full">
+    <!-- Top Bar -->
+    <header class="fixed top-0 inset-x-0 h-16 bg-white border-b border-gray-200 z-50 flex items-center px-6 justify-between">
+      <div class="flex items-center gap-3">
+        <button id="sidebar-toggle" class="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-brand-100 rounded-lg flex items-center justify-center">
+            <i data-lucide="map-pin" class="w-4 h-4 text-brand-600"></i>
+          </div>
+          <span class="font-bold text-lg hidden sm:inline">Attendance Tracker</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div id="clock-display" class="text-sm font-mono text-gray-500 hidden sm:inline"></div>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-brand-500 text-white rounded-full flex items-center justify-center text-sm font-bold" id="user-avatar">A</div>
+          <div class="hidden sm:block">
+            <div class="text-sm font-medium" id="user-display-name">Admin</div>
+            <div class="text-xs text-gray-500" id="user-display-role">admin</div>
+          </div>
+        </div>
+        <button id="logout-btn" class="p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-red-500 transition" title="Logout">
+          <i data-lucide="log-out" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </header>
+
+    <div class="flex pt-16 h-full">
+      <!-- Sidebar -->
+      <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-64 bg-white border-r border-gray-200 transform -translate-x-full lg:translate-x-0 transition-transform z-40 pt-16 lg:pt-0 overflow-y-auto">
+        <nav class="p-4 space-y-1" id="sidebar-nav">
+          <!-- populated by JS based on role -->
+        </nav>
+      </aside>
+
+      <!-- Overlay for mobile sidebar -->
+      <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black/40 z-30 lg:hidden" onclick="toggleSidebar()"></div>
+
+      <!-- Main Content Area -->
+      <main class="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto" id="main-content">
+        <!-- Page content injected here by JS -->
+      </main>
+    </div>
+  </div>
+
+  <!-- ═══ JavaScript Application ═══ -->
+  <script src="/app.js"></script>
+</body>
+</html>
