@@ -16,10 +16,21 @@ async function api(endpoint, options = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: { ...headers, ...options.headers },
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: { ...headers, ...options.headers },
+    });
+  } catch (err) {
+    // fetch only throws for network-level failures (DNS, refused, TLS, CORS
+    // blockers) — the server never answered. Show something actionable.
+    console.error('Network error reaching API:', err);
+    throw new Error(
+      'Cannot reach the server. The backend may be offline or starting up ' +
+      '(free tiers sleep after inactivity — try again in ~30 seconds).'
+    );
+  }
 
   if (res.status === 401) {
     // A failed login attempt is not an expired session — don't hijack it.
@@ -1176,6 +1187,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.remove('hidden');
+      if (err.message.startsWith('Cannot reach the server')) {
+        showToast('Backend unreachable — see message above', 'warning');
+      }
     }
   });
 
