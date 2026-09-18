@@ -431,13 +431,17 @@
     if (!url.includes('/api/')) return _fetch.call(window, input, init);
 
     try {
-      const parsed = new URL(url, location.href);
+      // Extract the /api/... path directly. Using new URL() with a
+      // relative path on GitHub Pages would prepend the subpath
+      // (e.g. /offsite-employee-login/api/...) and break routing.
+      const apiIdx = url.indexOf('/api/');
+      const apiPath = apiIdx >= 0 ? url.slice(apiIdx) : url;
       const method = (init && init.method) || 'GET';
       const token = (init && init.headers && (init.headers['Authorization'] || init.headers.authorization)) || '';
       const bearer = token.startsWith('Bearer ') ? token.slice(7) : token;
       const body = init && init.body ? JSON.parse(init.body) : {};
 
-      const route = matchRoute(method, parsed.pathname);
+      const route = matchRoute(method, apiPath);
       if (!route) return makeResponse(err(404, 'Not Found'));
 
       const [key, ...params] = route;
