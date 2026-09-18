@@ -40,7 +40,17 @@ async function api(endpoint, options = {}) {
     }
   }
 
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    // Response was not JSON (e.g. a Render 404 page).
+    throw new Error(
+      res.status === 404
+        ? 'Backend not found — the server may need to be redeployed.'
+        : `Server returned ${res.status} ${res.statusText}`
+    );
+  }
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }

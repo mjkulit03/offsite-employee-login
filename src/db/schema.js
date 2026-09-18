@@ -3,11 +3,16 @@ const path = require('path');
 const fs = require('fs');
 
 const dbDir = path.join(__dirname, '../../data');
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-}
-
 const dbPath = process.env.DB_PATH || path.join(dbDir, 'attendance.db');
+
+// Ensure the parent directory of the database file exists.
+// On Render the DB lives on a persistent disk at /var/data; if the
+// directory is missing (first boot, disk mount delay) the server would
+// crash on the first saveDatabase() call.
+const dbParent = path.dirname(dbPath);
+if (!fs.existsSync(dbParent)) {
+  fs.mkdirSync(dbParent, { recursive: true });
+}
 
 let db = null;
 
@@ -134,9 +139,15 @@ function ensureAdminActive() {
  */
 function saveDatabase() {
   if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(dbPath, buffer);
+  try {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  } catch (err) {
+    console.error('saveDatabase failed:', err.message);
+    // Don't crash the process — log and continue. The in-memory DB is
+    // still usable for the current request; data just won't persist.
+  }
 }
 
 /**

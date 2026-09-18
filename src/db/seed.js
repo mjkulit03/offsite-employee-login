@@ -66,6 +66,8 @@ async function seed() {
 }
 
 seed().catch((err) => {
-  console.error('Seed failed:', err);
-  process.exit(1);
+  // Don't kill the process — a seed failure (e.g. disk not yet mounted)
+  // should not prevent the server from starting. The admin can re-seed
+  // manually once the disk is available.
+  console.error('⚠️  Seed failed (server will still start):', err.message || err);
 });
