@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { initDatabase } = require('./db/schema');
+const { seed } = require('./db/seed');
 
 const authRoutes = require('./routes/auth');
 const attendanceRoutes = require('./routes/attendance');
@@ -76,6 +77,13 @@ async function start() {
   // Initialize database first
   await initDatabase();
   console.log('✅ Database initialized');
+
+  // Run seed on every startup to ensure default users exist and have
+  // correct credentials. Render may run 'node src/server.js' directly
+  // instead of 'npm start', which skips the prestart hook.
+  await seed().catch((err) => {
+    console.error('⚠️  Seed failed (server will still start):', err.message || err);
+  });
 
   app.listen(PORT, () => {
     console.log(`\n🚀 Attendance Tracker running on http://localhost:${PORT}`);
