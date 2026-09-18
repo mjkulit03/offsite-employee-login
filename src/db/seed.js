@@ -10,6 +10,9 @@ async function seed() {
   const hashPassword = (pwd) => bcrypt.hashSync(pwd, 10);
 
   // ── Admin ───────────────────────────────────────────────────────────────
+  // Always upsert: the password hash may be stale from a previous deploy,
+  // or the admin may have been created manually. Keep the default
+  // credentials (admin / admin123) in sync so the login page works.
   const existingAdmin = get('SELECT id FROM users WHERE username = ?', ['admin']);
   if (!existingAdmin) {
     run(`
@@ -17,6 +20,13 @@ async function seed() {
       VALUES (?, ?, ?, ?, 'admin', 'Administration', 1)
     `, ['admin', 'admin@company.com', hashPassword('admin123'), 'System Admin']);
     console.log('  ✅ Admin user created (admin / admin123, permanently active)');
+  } else {
+    // Force-reset password + ensure the account is active.
+    run(
+      "UPDATE users SET password_hash = ?, is_active = 1, full_name = 'System Admin' WHERE username = 'admin'",
+      [hashPassword('admin123')]
+    );
+    console.log('  ✅ Admin password reset to admin123, account activated');
   }
 
   // ── Supervisor ──────────────────────────────────────────────────────────
