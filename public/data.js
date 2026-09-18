@@ -14,7 +14,7 @@
     catch { return []; }
   }
   function setStore(key, data) { localStorage.setItem(PFX + key, JSON.stringify(data)); }
-  function nextId(items) { return items.length ? Math.max(...items.map(i => i.id)) + 1; }
+  function nextId(items) { return items.length ? Math.max(...items.map(i => i.id)) + 1 : 1; }
   function now() { return new Date().toISOString().replace('T', ' ').slice(0, 19); }
   function today() { return new Date().toISOString().slice(0, 10); }
 
@@ -233,6 +233,12 @@
     const end = q.searchParams.get('end');
     if (start) records = records.filter(a => a.clock_in_time >= start);
     if (end) records = records.filter(a => a.clock_in_time <= end + ' 23:59:59');
+    // Join with user data so views render names (matches /attendance/team shape)
+    const users = getStore('users');
+    records = records.map(a => {
+      const usr = users.find(x => x.id === a.user_id) || {};
+      return { ...a, full_name: usr.full_name || 'Unknown', department: usr.department || '', email: usr.email || '' };
+    });
     records.sort((a, b) => b.clock_in_time.localeCompare(a.clock_in_time));
     const limit = Number(q.searchParams.get('limit')) || 20;
     const page = Number(q.searchParams.get('page')) || 1;
@@ -356,7 +362,50 @@
     const todayAtt = att.filter(a => a.clock_in_time && a.clock_in_time.startsWith(todayStr));
     const statusBreakdown = {};
     att.forEach(a => { statusBreakdown[a.status] = (statusBreakdown[a.status] || 0) + 1; });
-    return ok({ totalEmployees: activeEmps.length, activeEmployees: activeEmps.length, totalRecords: att.length, todayClockedIn: todayAtt.length, statusBreakdown, weeklyTrend: [] });
+
+    // Last 7 days of clock-ins for the trend chart
+    const weeklyTrend = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dayStr = d.toISOString().slice(0, 10);
+      const dayRecs = att.filter(a => a.clock_in_time && a.clock_in_time.startsWith(dayStr));
+      weeklyTrend.push({
+        date: dayStr,
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        count: dayRecs.length,
+        outOfBounds: dayRecs.filter(a => a.status === 'out_of_bounds').length,
+      });
+    }
+
+    return ok({ totalEmployees: activeEmps.length, activeEmployees: activeEmps.length, totalRecords: att.length, todayClockedIn: todayAtt.length, statusBreakdown, weeklyTrend });
+  }
+
+  function handleReportDepartment(token) {
+    const u = getUserFromToken(token);
+    if (!u || !['admin', 'supervisor'].includes(u.role)) return err(403, 'Insufficient permissions');
+    const users = getStore('users');
+    let att = getStore('attendance');
+    if (u.role === 'supervisor') {
+      const teamIds = users.filter(x => x.supervisor_id === u.id).map(x => x.id);
+      att = att.filter(a => teamIds.includes(a.user_id));
+    }
+    const byDept = {};
+    const ensureDept = key => {
+      if (!byDept[key]) byDept[key] = { department: key, employees: 0, total_records: 0, out_of_bounds: 0 };
+      return byDept[key];
+    };
+    users.filter(x => x.is_active && x.role !== 'admin').forEach(x => {
+      ensureDept(x.department || 'Unassigned').employees++;
+    });
+    att.forEach(a => {
+      const usr = users.find(x => x.id === a.user_id);
+      const dept = ensureDept((usr && usr.department) || 'Unassigned');
+      dept.total_records++;
+      if (a.status === 'out_of_bounds') dept.out_of_bounds++;
+    });
+    const departments = Object.values(byDept).sort((a, b) => a.department.localeCompare(b.department));
+    return ok({ departments });
   }
 
   // --- Helpers ---
@@ -418,7 +467,7 @@
     if (m === 'GET' && pathname === '/api/audit') return ['getAudit'];
     // Reports
     if (m === 'GET' && pathname === '/api/reports/summary') return ['reportSummary'];
-    if (m === 'GET' && pathname === '/api/reports/department') return ok({ departments: [] });
+    if (m === 'GET' && pathname === '/api/reports/department') return ['reportDepartment'];
     return null;
   }
 
@@ -435,7 +484,11 @@
       // relative path on GitHub Pages would prepend the subpath
       // (e.g. /offsite-employee-login/api/...) and break routing.
       const apiIdx = url.indexOf('/api/');
-      const apiPath = apiIdx >= 0 ? url.slice(apiIdx) : url;
+      let apiPath = apiIdx >= 0 ? url.slice(apiIdx) : url;
+      // Strip the query string before route matching — routes are matched on
+      // the path only, and handlers below parse params from the full URL.
+      const qIdx = apiPath.indexOf('?');
+      if (qIdx >= 0) apiPath = apiPath.slice(0, qIdx);
       const method = (init && init.method) || 'GET';
       const token = (init && init.headers && (init.headers['Authorization'] || init.headers.authorization)) || '';
       const bearer = token.startsWith('Bearer ') ? token.slice(7) : token;
@@ -473,6 +526,7 @@
         case 'auditActions': result = handleGetAuditActions(bearer); break;
         case 'auditExport': result = handleAuditExport(url, bearer); break;
         case 'reportSummary': result = handleReportSummary(bearer); break;
+        case 'reportDepartment': result = handleReportDepartment(bearer); break;
         default: result = err(404, 'Not Found');
       }
 

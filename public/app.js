@@ -120,6 +120,14 @@ function navigateTo(page) {
   const activeLink = document.querySelector(`.sidebar-link[data-page="${page}"]`);
   if (activeLink) activeLink.classList.add('active');
 
+  // Tear down any existing Leaflet map BEFORE replacing the DOM. Replacing
+  // main.innerHTML leaves the old map pointing at detached nodes — pending
+  // animations then throw "Cannot read properties of undefined (reading
+  // '_leaflet_pos')" and the map instance leaks on every navigation.
+  if (map) { try { map.remove(); } catch {} map = null; }
+  marker = null;
+  geofenceCircles = [];
+
   const main = document.getElementById('main-content');
   main.innerHTML = '<div class="flex items-center justify-center h-64"><div class="animate-spin w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full"></div></div>';
 
@@ -183,6 +191,7 @@ function getCurrentPosition() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Geolocation not supported'));
+      return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
@@ -196,7 +205,12 @@ function getCurrentPosition() {
 function initMap(containerId, lat, lng, geofences = []) {
   if (map) { map.remove(); map = null; }
 
-  map = L.map(containerId).setView([0, 0], 2);
+  // zoomAnimation: false — fitBounds() animates a zoom, and navigating away
+  // mid-animation (the old map is destroyed with the page DOM) would fire the
+  // transitionend handler on a detached pane, crashing Leaflet with
+  // "Cannot read properties of undefined (reading '_leaflet_pos')".
+  // These are small dashboard maps, so the instant zoom is not noticeable.
+  map = L.map(containerId, { zoomAnimation: false }).setView([0, 0], 2);
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
@@ -308,6 +322,9 @@ async function renderEmployeeDashboard(container) {
         </h2>
         <div id="map" class="w-full rounded-xl"></div>
         <p id="location-status" class="mt-3 text-sm text-gray-500 text-center">Click "Clock In/Out" to capture your location on the map.</p>
+        <div class="mt-2 text-center">
+          <button id="use-office-btn" type="button" class="text-xs text-brand-600 hover:text-brand-800 underline">Demo: use office location instead of GPS</button>
+        </div>
       </div>
 
       <!-- Recent History -->
@@ -358,8 +375,10 @@ async function renderEmployeeDashboard(container) {
     btn.textContent = 'Capturing location...';
 
     try {
-      const pos = await getCurrentPosition();
-      updateUserMarker(pos.latitude, pos.longitude);
+      // Use the demo location if set via the "use office location" helper,
+      // otherwise capture real GPS coordinates.
+      const pos = window.__demoPos || await getCurrentPosition();
+      if (!window.__demoPos) updateUserMarker(pos.latitude, pos.longitude);
 
       const isClockedIn = status.clockedIn;
       const endpoint = isClockedIn ? '/attendance/clock-out' : '/attendance/clock-in';
@@ -380,6 +399,21 @@ async function renderEmployeeDashboard(container) {
       btn.textContent = status.clockedIn ? 'Clock Out' : 'Clock In';
     }
   });
+
+  // Demo helper: clock in at the first active geofence without GPS
+  const officeBtn = document.getElementById('use-office-btn');
+  if (officeBtn) {
+    officeBtn.addEventListener('click', () => {
+      const first = (geofences.geofences || [])[0];
+      if (!first) { showToast('No geofences configured', 'error'); return; }
+      window.__demoPos = { latitude: first.latitude, longitude: first.longitude };
+      updateUserMarker(first.latitude, first.longitude);
+      map.setView([first.latitude, first.longitude], 15);
+      document.getElementById('location-status').textContent =
+        `Demo location set: ${first.name} (${first.latitude.toFixed(5)}, ${first.longitude.toFixed(5)})`;
+      showToast(`Using demo location: ${first.name}`, 'info');
+    });
+  }
 }
 
 async function renderAdminDashboard(container) {
@@ -629,7 +663,8 @@ async function renderEmployees(container) {
       department: document.getElementById('emp-dept').value,
     };
     const pw = document.getElementById('emp-pw').value;
-    if (!id && pw) body.password = pw;
+    if (pw) body.password = pw;
+    else if (id) delete body.password; // keep existing password on edit when left blank
 
     try {
       if (id) {
@@ -1110,6 +1145,10 @@ async function renderReports(container) {
       <!-- Charts -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="bg-white rounded-xl border p-6">
+          <h3 class="font-semibold mb-4">Weekly Clock-in Trend</h3>
+          <canvas id="report-trend-chart" height="220"></canvas>
+        </div>
+        <div class="bg-white rounded-xl border p-6">
           <h3 class="font-semibold mb-4">Attendance by Status</h3>
           <canvas id="report-status-chart" height="220"></canvas>
         </div>
@@ -1141,6 +1180,20 @@ async function renderReports(container) {
       </div>
     </div>`;
   lucide.createIcons();
+
+  // Weekly trend chart
+  const trend = summary.weeklyTrend || [];
+  new Chart(document.getElementById('report-trend-chart'), {
+    type: 'line',
+    data: {
+      labels: trend.map(d => d.label),
+      datasets: [
+        { label: 'Clock-ins', data: trend.map(d => d.count), borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.1)', fill: true, tension: 0.35, borderRadius: 4 },
+        { label: 'Out of Bounds', data: trend.map(d => d.outOfBounds), borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.08)', fill: true, tension: 0.35, borderRadius: 4 },
+      ],
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+  });
 
   // Status chart
   const sd = summary.statusBreakdown || {};

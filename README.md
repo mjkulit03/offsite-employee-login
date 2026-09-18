@@ -49,10 +49,37 @@ A web-based attendance and location tracking system for remote/offsite employees
 │   ├── index.html      # Main app shell (login + app layout)
 │   ├── data.js         # localStorage-backed mock API layer
 │   ├── config.js       # Runtime configuration
-│   └── app.js          # Frontend application logic
-├── README.md
-└── .gitignore
+│   ├── app.js          # Frontend application logic
+│   └── .nojekyll       # Serves dotfiles as-is on GitHub Pages
+├── tests/
+│   ├── data-layer.test.mjs   # API layer tests (auth, attendance, reports…)
+│   └── helpers/mock-env.mjs  # Browser-global stubs + data.js loader
+├── .github/workflows/deploy-pages.yml  # Auto-deploy to GitHub Pages
+├── package.json        # Test scripts only — no dependencies, no build step
+└── README.md
 ```
+
+## Development
+
+No install step needed — everything is dependency-free. To run the test suite
+(exercises the mock API layer with Node's built-in test runner, Node 18+):
+
+```bash
+npm test
+
+# Syntax-check the browser scripts:
+npm run check
+
+# Local preview:
+cd public && python -m http.server 8000
+# then open http://localhost:8000
+```
+
+### Testing clock-in without GPS
+
+The employee dashboard has a **"Demo: use office location instead of GPS"**
+link under the map. Click it to clock in at the first active geofence without
+granting location permissions — handy for demos and local testing.
 
 ## Deployment
 
