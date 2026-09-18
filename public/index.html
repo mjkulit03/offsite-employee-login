@@ -130,7 +130,9 @@
   </div>
 
   <!-- ═══ JavaScript Application ═══ -->
-  <!-- config.js must load first: it sets window.APP_CONFIG.API_BASE -->
+  <!-- data.js: localStorage-backed API layer (loads first) -->
+  <script src="data.js"></script>
+  <!-- config.js: runtime settings -->
   <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
